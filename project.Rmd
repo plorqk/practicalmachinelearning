@@ -1,0 +1,68 @@
+---
+title: "Barbell Exercise Classification"
+author: "Kevin Moore"
+output: html_document
+---
+
+The goal of this assignment was to build a classifier to determine whether six participants were correctly doing dumbell exercises using cross validation.  Using data from accelerometers on the belt, forearm, and dumbell we build a random forest classifier that succesfully classifies twenty test cases.
+
+Data for this assignment was taken from here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise).
+
+###How did we build the model?
+First we had to reduce the variable space. The original data set has 160 variables describing various aspects of the exercise.  Examing both the training and test sets there were close to 100 variables that were nearly entirely blank or had NA values in them.  Intuitively these would be the first variables to remove.  To justify removing them we ran  nearZeroVar on them and all the blank and NA ones came up as true. In addition we removed the rawtime, cvtdtimestamp, newwindow and numwindow variables as they were not directly related to the motion of the exercise--they were more bookkeeping variables. That left us with 54 variables to use to classify.
+
+We then split up the data into training and testing sets (a key component of cross validation).  We set aside 60% for training and 40% for testing.  We then attempted to try various models presented in class.  We set our initial seed to 5296.  We tried the following models to get a baseline of how well they would do before any additional variable reduction or preprocessing: regression trees, linear discriminant analysis (LDA), quadratic disriminant analysis (QDA).  We attempted to try random forests (RF) but due to technical limitations (32-bit OS) we were running out of memory and were unable to build a model with a 60% sized training set.  We later reduced the size of the training set to 20% and were able to build random forest models that sucessfully classified the test data. 
+
+###What was the performance like?
+Initial performace of the models lead to our final choice to use random forests. The regression tree model was only about 50% accurate.The LDA was around 73% accurate. The QDA model was around 91% accurate and quick to build. When after we reduced the training set size we were able to build a random forest model that was around 97.0% accurate but it was very slow to build. Below is the confusion matrix for using the random forest.
+
+
+```{r, echo=FALSE, cached=TRUE}
+library(lattice)
+library(ggplot2)
+library(caret)
+library(randomForest)
+
+
+f <- read.csv("pml-training.csv",header=TRUE)
+set.seed(5296)
+
+vars <- c("user_name","roll_belt","pitch_belt","yaw_belt","total_accel_belt","gyros_belt_x","gyros_belt_y",
+          "gyros_belt_z","accel_belt_x","accel_belt_y","accel_belt_z","magnet_belt_x","magnet_belt_y",
+          "magnet_belt_z","roll_arm","pitch_arm","yaw_arm","total_accel_arm","gyros_arm_x","gyros_arm_y",
+          "gyros_arm_z","accel_arm_x","accel_arm_y","accel_arm_z","magnet_arm_x","magnet_arm_y","magnet_arm_z",
+          "roll_dumbbell","pitch_dumbbell","yaw_dumbbell","total_accel_dumbbell","gyros_dumbbell_x",
+          "gyros_dumbbell_y","gyros_dumbbell_z","accel_dumbbell_x","accel_dumbbell_y","accel_dumbbell_z",
+          "magnet_dumbbell_x","magnet_dumbbell_y","magnet_dumbbell_z","roll_forearm","pitch_forearm",
+          "yaw_forearm","total_accel_forearm","gyros_forearm_x","gyros_forearm_y","gyros_forearm_z",
+          "accel_forearm_x","accel_forearm_y","accel_forearm_z","magnet_forearm_x","magnet_forearm_y",
+          "magnet_forearm_z","classe") 
+
+
+data <- f[,vars]
+
+inTrain <- createDataPartition(y=data$classe,p=.2,list=FALSE)
+
+training <- data[inTrain,]
+testing <- data[-inTrain,]
+
+modelfit <- train(classe ~.,data=training,method="rf",prox=TRUE)
+p <-predict(modelfit,newdata=testing)
+
+cm <- confusionMatrix(p,testing$classe)
+print(cm)
+
+```
+
+###Cross validation
+The accuracy is pretty good for the random forest, but were we overfitting the model?  To test that we selected a new random seed (329) which would create a new random subsampling for cross validation.  The result was 97.9% accuracy on the new model.  This suggested that the random forest model really may be that good.  To check that further we set a new random seed (7447) and trained another model.  The result was lower than the other two but not by much, 96.9% accuracy.  We were convinced that the random forest model was a good model for this classifier.
+
+###Expected Out of Sample Error
+Random forests don't really need cross validation as it is done internally during the run (see http://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm).  However for the requirements of this class we can set new seeds to simulate random subsampling and sort of esitmate it. If we take the error rates from the three models we ran (3%, 2.1% and 3.1%) and average them we get 2.73% error rate.  That is pretty good, increasing the training set size would be a significant factor in reducing it further though.
+
+###Conclusion
+So how did things turn out?  With our first model (97% accuracy) we were able to sucessfully classify all twenty from the test set.  Aside from reducing the variable space and reducing the number of training examples used to create the model we determined that no other preprocessing was needed to create a classifer that had excellent results.
+
+*****
+###Appendix:
+For those that want to reproduce these results they were run on a Windows 8.1 32-bit system with 4 GB RAM (3.25 usable) using RStudio 0.98.1062 with R 3.1.2 and caret library 6.0-35 and randomforest library 4.6-10.
